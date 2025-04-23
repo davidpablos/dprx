@@ -1,5 +1,7 @@
+use nix::unistd::{fork, ForkResult};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::process;
 
 fn handle_client(mut stream: TcpStream) {
     let mut buffer = [0; 512];
@@ -14,11 +16,33 @@ fn handle_client(mut stream: TcpStream) {
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:9000")?;
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:9000").unwrap();
+    listener.set_nonblocking(false).unwrap();
+    for _ in 0..3 {
+        match unsafe { fork() } {
+            Ok(ForkResult::Child) => {
+                println!("Child PID {}: listening for connections", process::id());
 
-    for stream in listener.incoming() {
-        handle_client(stream?);
+                loop {
+                    match listener.accept() {
+                        Ok((stream, addr)) => {
+                            println!("PID {}: accepted connection from {}", process::id(), addr);
+                            handle_client(stream);
+                        }
+                        Err(e) => {
+                            eprintln!("PID {}: accept failed: {}", process::id(), e);
+                        }
+                    }
+                }
+            }
+            Ok(ForkResult::Parent { .. }) => continue,
+            Err(e) => eprintln!("fork failed: {}", e),
+        }
     }
-    Ok(())
+
+    println!("Parent PID {}: forked all children", process::id());
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
 }
