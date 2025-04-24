@@ -1,8 +1,7 @@
-use nix::unistd::{ForkResult, fork};
+use crate::process::worker::Worker;
+use nix::unistd::{fork, ForkResult};
 use std::net::TcpListener;
 use std::process;
-use crate::process::worker;
-use crate::process::worker::Worker;
 
 pub struct Master {
     listener: TcpListener,
@@ -27,22 +26,9 @@ impl Master {
             match unsafe { fork() } {
                 Ok(ForkResult::Child) => {
                     println!("Child PID {}: listening for connections", process::id());
-                    loop {
-                        match self.listener.accept() {
-                            Ok((stream, addr)) => {
-                                println!(
-                                    "PID {}: accepted connection from {}",
-                                    process::id(),
-                                    addr
-                                );
-                                let mut worker = Worker::new(process::id(), stream);
-                                worker.handle_client();
-                            }
-                            Err(e) => {
-                                eprintln!("PID {}: accept failed: {}", process::id(), e);
-                            }
-                        }
-                    }
+                    let worker = Worker::new(process::id(), self.listener.try_clone().unwrap());
+                    worker.run();
+                    process::exit(0);
                 }
                 Ok(ForkResult::Parent { .. }) => continue,
                 Err(e) => eprintln!("fork failed: {}", e),
