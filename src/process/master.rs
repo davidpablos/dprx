@@ -13,7 +13,7 @@ impl Master {
         let address = ip + ":" + &port.to_string();
         let listener = TcpListener::bind(address).expect("Failed to bind to address");
         listener
-            .set_nonblocking(false)
+            .set_nonblocking(true)
             .expect("Failed to set blocking mode");
         Master {
             listener,
@@ -26,7 +26,7 @@ impl Master {
             match unsafe { fork() } {
                 Ok(ForkResult::Child) => {
                     println!("Child PID {}: listening for connections", process::id());
-                    let worker = Worker::new(process::id(), self.listener.try_clone().unwrap());
+                    let mut worker = Worker::new(process::id(), self.listener.try_clone().unwrap());
                     worker.run();
                     process::exit(0);
                 }
