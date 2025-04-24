@@ -1,5 +1,4 @@
 use std::io::{Read, Write};
-use std::net::{TcpListener as StdTcpListener};
 use std::process;
 use mio::{Events, Interest, Poll, Token};
 use mio::net::{TcpListener, TcpStream};
@@ -12,9 +11,8 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(pid: u32, listener: StdTcpListener) -> Self {
-        let mio_listener = TcpListener::from_std(listener);
-        Worker { pid, listener: mio_listener }
+    pub fn new(pid: u32, listener: TcpListener) -> Self {
+        Worker { pid, listener }
     }
 
     pub fn run(&mut self) {

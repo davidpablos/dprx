@@ -26,7 +26,9 @@ impl Master {
             match unsafe { fork() } {
                 Ok(ForkResult::Child) => {
                     println!("Child PID {}: listening for connections", process::id());
-                    let mut worker = Worker::new(process::id(), self.listener.try_clone().unwrap());
+                    let std_listener = self.listener.try_clone().unwrap();
+                    let mio_listener = mio::net::TcpListener::from_std(std_listener);
+                    let mut worker = Worker::new(process::id(), mio_listener);
                     worker.run();
                     process::exit(0);
                 }
