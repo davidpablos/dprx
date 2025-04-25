@@ -49,14 +49,18 @@ impl Worker {
 
     fn handle_client(&self, mut stream: TcpStream) {
         let mut buffer = [0; 512];
-        match stream.read(&mut buffer) {
-            Ok(_) => {
-                println!("Received: {}", String::from_utf8_lossy(&buffer));
+        loop {
+            match stream.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {
+                    println!("Received: {}", String::from_utf8_lossy(&buffer));
 
-                let response = "HTTP/1.1 200 OK\r\nContent-Length: 14\r\n\r\nHello world!\r\n";
-                stream.write_all(response.as_bytes()).unwrap();
-            },
-            Err(e) => eprintln!("Error reading: {}", e),
+                    let response = "HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\nHello world!\r\n";
+                    stream.write_all(response.as_bytes()).unwrap();
+                    stream.flush().unwrap();
+                },
+                Err(e) => eprintln!("Error reading: {}", e),
+            }
         }
     }
 }
