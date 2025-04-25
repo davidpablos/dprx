@@ -26,18 +26,20 @@ impl Worker {
             poll.poll(&mut events, None).unwrap();
             for event in events.iter() {
                 match event.token() {
-                    LISTENER if event.is_readable() => {
-                        match self.listener.accept() {
-                            Ok((stream, addr)) => {
-                                println!(
-                                    "PID {}: accepted connection from {}",
-                                    process::id(),
-                                    addr
-                                );
-                                self.handle_client(stream);
-                            }
-                            Err(e) => {
-                                eprintln!("PID {}: accept failed: {}", process::id(), e);
+                    LISTENER => {
+                        loop {
+                            match self.listener.accept() {
+                                Ok((stream, addr)) => {
+                                    println!(
+                                        "PID {}: accepted connection from {}",
+                                        process::id(),
+                                        addr
+                                    );
+                                    self.handle_client(stream);
+                                }
+                                Err(e) => {
+                                    eprintln!("PID {}: accept failed: {}", process::id(), e);
+                                }
                             }
                         }
                     },
