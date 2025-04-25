@@ -1,6 +1,8 @@
 use crate::process::worker::Worker;
+use mio::net::TcpListener as MioTcpListener;
 use nix::unistd::{fork, ForkResult};
-use std::net::TcpListener;
+use socket2::{Domain, Protocol, Socket, Type};
+use std::net::{SocketAddr, TcpListener};
 use std::process;
 
 pub struct Master {
@@ -10,11 +12,12 @@ pub struct Master {
 
 impl Master {
     pub fn new(ip: String, port: u16, num_workers: usize) -> Self {
-        let address = ip + ":" + &port.to_string();
-        let listener = TcpListener::bind(address).expect("Failed to bind to address");
+        let address = format!("{ip}:{port}");
+        let listener = create_reuse_address_socket(&address);
         listener
             .set_nonblocking(true)
-            .expect("Failed to set blocking mode");
+            .expect("Failed to set listener to non-blocking mode");
+
         Master {
             listener,
             num_workers,
@@ -25,11 +28,18 @@ impl Master {
         for _ in 0..self.num_workers {
             match unsafe { fork() } {
                 Ok(ForkResult::Child) => {
-                    println!("Child PID {}: listening for connections", process::id());
-                    let std_listener = self.listener.try_clone().unwrap();
-                    let mio_listener = mio::net::TcpListener::from_std(std_listener);
+                    println!("Child PID {}: starting worker", process::id());
+
+                    let std_listener = self
+                        .listener
+                        .try_clone()
+                        .expect("Failed to clone TcpListener");
+                    let mio_listener =
+                        MioTcpListener::from_std(std_listener);
+
                     let mut worker = Worker::new(process::id(), mio_listener);
                     worker.run();
+
                     process::exit(0);
                 }
                 Ok(ForkResult::Parent { .. }) => continue,
@@ -37,4 +47,19 @@ impl Master {
             }
         }
     }
+}
+
+fn create_reuse_address_socket(addr: &str) -> TcpListener {
+    let address: SocketAddr = addr.parse().expect("Invalid address");
+
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))
+        .expect("Failed to create socket");
+
+    #[cfg(not(windows))]
+    socket.set_reuse_address(true).unwrap();
+
+    socket.bind(&address.into()).expect("Bind failed");
+    socket.listen(128).expect("Listen failed");
+
+    socket.into()
 }
